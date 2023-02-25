@@ -9,6 +9,7 @@ import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.cscore.CvSink;
 import edu.wpi.first.cscore.CvSource;
@@ -102,12 +103,15 @@ public class Robot extends TimedRobot {
 
   /** This function is called once each time the robot enters teleoperated mode. */
   @Override
-  public void teleopInit() {}
+  public void teleopInit() {
+    SmartDashboard.putString("Teleop", "Initializing!");
+  }
 
   /** This function is called periodically during teleoperated mode. */
   @Override
   public void teleopPeriodic() {
     m_robotDrive.arcadeDrive(-m_controller.getLeftY(), -m_controller.getRightX()); //two stick control
+    SmartDashboard.putString("Teleop", "LeftY: " + (-m_controller.getLeftY()));
     //m_robotDrive.arcadeDrive(-m_controller.getLeftY(), m_controller.getLeftX(),true); //This code is for a one control stick drive 
    // m_robotDrive.tankDrive(-m_controller.getLeftY(), -m_controller.getRightY()); // this code is for tank control
   }
