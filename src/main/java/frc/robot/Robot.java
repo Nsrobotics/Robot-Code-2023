@@ -8,12 +8,16 @@ import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+import edu.wpi.first.wpilibj.motorcontrol.MotorController;
+import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
+import edu.wpi.first.wpilibj.motorcontrol.PWMMotorController;
 import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.cscore.CvSink;
 import edu.wpi.first.cscore.CvSource;
 import edu.wpi.first.cscore.UsbCamera;
+import edu.wpi.first.wpilibj.motorcontrol.Talon;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
@@ -27,9 +31,15 @@ import edu.wpi.first.wpilibj.AnalogGyro;
  * directory.
  */
 public class Robot extends TimedRobot {
-  private final PWMSparkMax m_leftDrive = new PWMSparkMax(0);
-  private final PWMSparkMax m_rightDrive = new PWMSparkMax(1);
-  private final DifferentialDrive m_robotDrive = new DifferentialDrive(m_leftDrive, m_rightDrive);
+  //private final PWMSparkMax m_leftDrive = new PWMSparkMax(0);
+  //private final PWMSparkMax m_rightDrive = new PWMSparkMax(1);
+  private final Talon m_leftDrive0 = new Talon(0);
+  private final Talon m_leftDrive1 = new Talon(1);
+  private final Talon m_rightDrive2 = new Talon(2);
+  private final Talon m_rightDrive3 = new Talon(3);
+  private final MotorControllerGroup m_left = new MotorControllerGroup(m_leftDrive0,m_leftDrive1);
+  private final MotorControllerGroup m_right = new MotorControllerGroup(m_rightDrive2,m_rightDrive3);
+  private final DifferentialDrive m_robotDrive = new DifferentialDrive(m_left, m_right);
   private final XboxController m_controller = new XboxController(0);
   private final Timer m_timer = new Timer();
   private final AnalogGyro m_gyro = new AnalogGyro(0);
@@ -46,7 +56,9 @@ public class Robot extends TimedRobot {
     // result in both sides moving forward. Depending on how your robot's
     // gearbox is constructed, you might have to invert the left side instead.
     m_gyro.reset();
-    m_rightDrive.setInverted(true);
+    m_right.setInverted(true);
+    m_left.setInverted(false);
+    
     
     m_visionThread =
         new Thread(
@@ -104,14 +116,18 @@ public class Robot extends TimedRobot {
   /** This function is called once each time the robot enters teleoperated mode. */
   @Override
   public void teleopInit() {
-    SmartDashboard.putString("Teleop", "Initializing!");
+    SmartDashboard.putString("Teleop", "Initialized!");
   }
 
   /** This function is called periodically during teleoperated mode. */
   @Override
   public void teleopPeriodic() {
     m_robotDrive.arcadeDrive(-m_controller.getLeftY(), -m_controller.getRightX()); //two stick control
-    SmartDashboard.putString("Teleop", "LeftY: " + (-m_controller.getLeftY()));
+    SmartDashboard.putNumber("Left Stick", (-m_controller.getLeftY()));
+    SmartDashboard.putNumber("Not Left Stick", (-m_controller.getRightX()));
+    //SmartDashboard.putNumber("right motor speed", m_rightDrive.get());
+    //SmartDashboard.putNumber("left motor speed", m_leftDrive.get());
+    
     //m_robotDrive.arcadeDrive(-m_controller.getLeftY(), m_controller.getLeftX(),true); //This code is for a one control stick drive 
    // m_robotDrive.tankDrive(-m_controller.getLeftY(), -m_controller.getRightY()); // this code is for tank control
   }
