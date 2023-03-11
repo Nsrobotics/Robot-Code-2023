@@ -7,6 +7,7 @@ package frc.robot;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.motorcontrol.MotorController;
 import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
@@ -23,7 +24,10 @@ import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 import edu.wpi.first.wpilibj.AnalogGyro;
-
+import edu.wpi.first.wpilibj.Compressor;
+import edu.wpi.first.wpilibj.DoubleSolenoid;
+import edu.wpi.first.wpilibj.PneumaticsModuleType;
+import static edu.wpi.first.wpilibj.DoubleSolenoid.Value.*;
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
  * each mode, as described in the TimedRobot documentation. If you change the name of this class or
@@ -44,7 +48,7 @@ public class Robot extends TimedRobot {
   private final Timer m_timer = new Timer();
   private final AnalogGyro m_gyro = new AnalogGyro(0);
   Thread m_visionThread;
-
+  private final DoubleSolenoid exampleDouble = new DoubleSolenoid(PneumaticsModuleType.REVPH, 0, 7);
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
@@ -58,8 +62,8 @@ public class Robot extends TimedRobot {
     m_gyro.reset();
     m_right.setInverted(true);
     m_left.setInverted(false);
-    
-    
+  
+      
     m_visionThread =
         new Thread(
             () -> {
@@ -117,20 +121,53 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopInit() {
     SmartDashboard.putString("Teleop", "Initialized!");
+   /*  Compressor phCompressor = new Compressor(1, PneumaticsModuleType.REVPH);
+  phCompressor.enableDigital();
+  phCompressor.disable();
+
+  boolean enabled = phCompressor.enabled();
+  boolean pressureSwitch = phCompressor.getPressureSwitchValue();
+  double current = phCompressor.getCurrent();
+  DoubleSolenoid exampleDoublePH = new DoubleSolenoid(9, PneumaticsModuleType.REVPH, 4, 5);
+
+  exampleDoublePH.set(kOff);
+  exampleDoublePH.set(kForward);
+  exampleDoublePH.set(kReverse);
+  */
   }
 
   /** This function is called periodically during teleoperated mode. */
   @Override
   public void teleopPeriodic() {
     m_robotDrive.arcadeDrive(-m_controller.getLeftY(), -m_controller.getRightX()); //two stick control
-    SmartDashboard.putNumber("Left Stick", (-m_controller.getLeftY()));
-    SmartDashboard.putNumber("Not Left Stick", (-m_controller.getRightX()));
+    exampleDouble.set(DoubleSolenoid.Value.kForward);
+    /*
+    if (m_controller.getBButtonPressed()) {
+      exampleDouble.toggle();
+   }
+   
+else if (m_controller.getYButtonPressed()) {
+  exampleDouble.toggle();
+}
+
+
+    exampleDouble.set(kReverse);
+    if (m_controller.getXButtonPressed()) {
+      exampleDouble.toggle();
+   }
+   */
+    SmartDashboard.putNumber("Not Right Stick (Left Stick)", (-m_controller.getLeftY()));
+    SmartDashboard.putNumber("Right Stick", (-m_controller.getRightX()));
+    SmartDashboard.putNumber("Right Stick", (-m_controller.getRightX()));
     //SmartDashboard.putNumber("right motor speed", m_rightDrive.get());
     //SmartDashboard.putNumber("left motor speed", m_leftDrive.get());
     
     //m_robotDrive.arcadeDrive(-m_controller.getLeftY(), m_controller.getLeftX(),true); //This code is for a one control stick drive 
    // m_robotDrive.tankDrive(-m_controller.getLeftY(), -m_controller.getRightY()); // this code is for tank control
   }
+  private void exampleDoubleset(Value kreverse) {
+  }
+
   /** This function is called once each time the robot enters test mode. */
   @Override
   public void testInit() {}
