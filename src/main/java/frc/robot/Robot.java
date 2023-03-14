@@ -24,10 +24,12 @@ import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 import edu.wpi.first.wpilibj.AnalogGyro;
-import edu.wpi.first.wpilibj.Compressor;
+/*
+ * import edu.wpi.first.wpilibj.Compressor;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
 import edu.wpi.first.wpilibj.PneumaticsModuleType;
 import static edu.wpi.first.wpilibj.DoubleSolenoid.Value.*;
+ */
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
  * each mode, as described in the TimedRobot documentation. If you change the name of this class or
@@ -35,8 +37,10 @@ import static edu.wpi.first.wpilibj.DoubleSolenoid.Value.*;
  * directory.
  */
 public class Robot extends TimedRobot {
-  private final PWMSparkMax m_lift1 = new PWMSparkMax(4);
-  private final PWMSparkMax m_lift2 = new PWMSparkMax(5);
+  private final PWMSparkMax m_lift1 = new PWMSparkMax(7);
+
+
+
   private final Talon m_leftDrive0 = new Talon(0);
   private final Talon m_leftDrive1 = new Talon(1);
   private final Talon m_rightDrive2 = new Talon(2);
@@ -44,12 +48,12 @@ public class Robot extends TimedRobot {
   private final MotorControllerGroup m_left = new MotorControllerGroup(m_leftDrive0,m_leftDrive1);
   private final MotorControllerGroup m_right = new MotorControllerGroup(m_rightDrive2,m_rightDrive3);
   private final DifferentialDrive m_robotDrive = new DifferentialDrive(m_left, m_right);
+
   private final XboxController m_controller = new XboxController(0);
-  private final MotorControllerGroup m_lift = new MotorControllerGroup(m_lift1,m_lift2);
   private final Timer m_timer = new Timer();
   private final AnalogGyro m_gyro = new AnalogGyro(0);
   Thread m_visionThread;
-  private final DoubleSolenoid exampleDouble = new DoubleSolenoid(PneumaticsModuleType.REVPH, 0, 7);
+  //private final DoubleSolenoid exampleDouble = new DoubleSolenoid(PneumaticsModuleType.REVPH, 0, 7);
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
@@ -108,14 +112,18 @@ public class Robot extends TimedRobot {
   @Override
   public void autonomousPeriodic() {
     // Drive for 2 seconds
-    m_robotDrive.arcadeDrive(0.5,0.50);
+    
+  
     if (m_timer.get() < 2.0) {
       // Drive forwards half speed, make sure to turn input squaring off
       //m_robotDrive.arcadeDrive(0.25, 0.0, false);
       //m_robotDrive.arcadeDrive(0.25,0.50); 
+      m_lift1.set(0.5);
     } else {
-      m_robotDrive.stopMotor(); // stop robot
+      m_lift1.stopMotor(); // stop robot
     }
+    
+    
   }
 
   /** This function is called once each time the robot enters teleoperated mode. */
@@ -141,26 +149,45 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopPeriodic() {
     m_robotDrive.arcadeDrive(-m_controller.getLeftY(), -m_controller.getRightX()); //two stick control
+  
+    //m_lift1.set(m_controller.getLeftTriggerAxis());
+    //m_lift1.set(-m_controller.getRightTriggerAxis());
 
+
+    SmartDashboard.putNumber("left trigger access", m_controller.getLeftTriggerAxis());
+    SmartDashboard.putNumber("right trigger axis", -m_controller.getRightTriggerAxis());
+    SmartDashboard.putBoolean("sparkmax is alive", m_lift1.isAlive());
+
+    if (m_controller.getLeftTriggerAxis() > 0)
+    {
+      m_lift1.set(0.5);
+    }
+    else 
+    { 
+      m_lift1.stopMotor();
+    }
+
+
+/* 
     if (m_controller.getLeftBumper()){
-      SmartDashboard.putString("Lift 1 controller", ("left"));
-      SmartDashboard.putString("Lift 2 controller", ("left"));
+      SmartDashboard.putString("Lift controller", ("left"));
       //m_lift1.set(0.1);
       //m_lift2.set(0.1);
-      m_lift.set(0.1);
+      m_lift1.set(0.1);
     } else if (m_controller.getRightBumper()){
-      SmartDashboard.putString("Lift 1 controller", ("right"));
-      SmartDashboard.putString("Lift 2 controller", ("right"));
+      SmartDashboard.putString("Lift controller", ("right"));
       //m_lift1.set(-0.1);
       //m_lift2.set(-0.1);
-      m_left.set(-0.1);
+      m_lift1.set(-0.1);
     } else {
-      SmartDashboard.putString("Lift 1 controller", ("none"));
-      SmartDashboard.putString("Lift 2 controller", ("none"));
+      SmartDashboard.putString("Lift controller", ("none"));
       //m_lift1.set(0);
       //m_lift2.set(0);
-      m_lift.set(0);
+      m_lift1.set(0);
     }
+*/
+
+
     //exampleDouble.set(DoubleSolenoid.Value.kForward);
     /*
     if (m_controller.getBButtonPressed()) {
