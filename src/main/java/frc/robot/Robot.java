@@ -4,10 +4,13 @@
 
 package frc.robot;
 
+//import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.PneumaticHub;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
-import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
+import edu.wpi.first.wpilibj.DoubleSolenoid;
+//import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.motorcontrol.MotorController;
 import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
@@ -24,12 +27,6 @@ import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 import edu.wpi.first.wpilibj.AnalogGyro;
-/*
- * import edu.wpi.first.wpilibj.Compressor;
-import edu.wpi.first.wpilibj.DoubleSolenoid;
-import edu.wpi.first.wpilibj.PneumaticsModuleType;
-import static edu.wpi.first.wpilibj.DoubleSolenoid.Value.*;
- */
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
  * each mode, as described in the TimedRobot documentation. If you change the name of this class or
@@ -37,10 +34,13 @@ import static edu.wpi.first.wpilibj.DoubleSolenoid.Value.*;
  * directory.
  */
 public class Robot extends TimedRobot {
-  private final PWMSparkMax m_lift1 = new PWMSparkMax(7);
-
-
-
+  private static final int PH_CAN_ID = 11;
+  private static int forwardChannel = 7;
+  private static int reverseChannel = 6;
+  PneumaticHub m_ph = new PneumaticHub(PH_CAN_ID);
+  DoubleSolenoid m_doubleSolenoid = m_ph.makeDoubleSolenoid(forwardChannel,reverseChannel);
+  
+  private final XboxController m_controller = new XboxController(0);
   private final Talon m_leftDrive0 = new Talon(0);
   private final Talon m_leftDrive1 = new Talon(1);
   private final Talon m_rightDrive2 = new Talon(2);
@@ -48,12 +48,13 @@ public class Robot extends TimedRobot {
   private final MotorControllerGroup m_left = new MotorControllerGroup(m_leftDrive0,m_leftDrive1);
   private final MotorControllerGroup m_right = new MotorControllerGroup(m_rightDrive2,m_rightDrive3);
   private final DifferentialDrive m_robotDrive = new DifferentialDrive(m_left, m_right);
-
-  private final XboxController m_controller = new XboxController(0);
   private final Timer m_timer = new Timer();
   private final AnalogGyro m_gyro = new AnalogGyro(0);
+  //--------------------------------------------------------------------------------------------------------
+  //Camera Code
+  //--------------------------------------------------------------------------------------------------------
   Thread m_visionThread;
-  //private final DoubleSolenoid exampleDouble = new DoubleSolenoid(PneumaticsModuleType.REVPH, 0, 7);
+  
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
@@ -61,26 +62,32 @@ public class Robot extends TimedRobot {
   @Override
   public void robotInit() {
     //CameraServer.startAutomaticCapture();
+  
     // We need to invert one side of the drivetrain so that positive voltages
     // result in both sides moving forward. Depending on how your robot's
     // gearbox is constructed, you might have to invert the left side instead.
-    m_gyro.reset();
+    // Add buttons to set the double
     m_right.setInverted(true);
     m_left.setInverted(false);
   
-      
+    SmartDashboard.setDefaultBoolean("Set Off", false);
+    SmartDashboard.setDefaultBoolean("Set Forward", false);
+    SmartDashboard.setDefaultBoolean("Set Reverse", false);
+    SmartDashboard.setDefaultBoolean("Enable Compressor Digital", false);
+    SmartDashboard.setDefaultBoolean("Disable Compressor", false);
+
     m_visionThread =
         new Thread(
             () -> {
               // Get the UsbCamera from CameraServer
               UsbCamera camera = CameraServer.startAutomaticCapture();
               // Set the resolution
-              camera.setResolution(640, 480);
+              camera.setResolution(480, 640);
 
               // Get a CvSink. This will capture Mats from the camera
               CvSink cvSink = CameraServer.getVideo();
               // Setup a CvSource. This will send images back to the Dashboard
-              CvSource outputStream = CameraServer.putVideo("Rectangle", 640, 480);
+              CvSource outputStream = CameraServer.putVideo("Rectangle", 480, 640);
 
               // Mats are very memory expensive. Lets reuse this Mat.
               Mat mat = new Mat();
@@ -107,115 +114,146 @@ public class Robot extends TimedRobot {
     m_visionThread.setDaemon(true);
     m_visionThread.start();
   }
+//------------------------------------------------------------------------------------------------
+//** Robot periodic */
+@Override
+  public void robotPeriodic() {
+    /**
+     * Get digital pressure switch state and display on Shuffleboard
+     */
+    SmartDashboard.putBoolean("Digital Pressure Switch",
+    m_ph.getPressureSwitch());
+   
+    /**
+    * Get compressor running status and display on Shuffleboard.
+    */
+    SmartDashboard.putBoolean("Compressor Running", m_ph.getCompressor());
 
-  /** This function is run once each time the robot enters autonomous mode. */
+    // Enable Compressor Digital button
+    if (SmartDashboard.getBoolean("Enable Compressor Digital", false)) {
+    SmartDashboard.putBoolean("Enable Compressor Digital", false);
+
+    /**
+    * Enable the compressor with digital sensor control.
+    *
+    * This will make the compressor run whenever the pressure switch is closed.
+    * If open, (disconnected or reached max pressure), the compressor will shut
+    * off.
+    */
+    m_ph.enableCompressorDigital();
+    
+    }
+
+    // Disable Compressor button
+    if (SmartDashboard.getBoolean("Disable Compressor", false)) {
+    SmartDashboard.putBoolean("Disable Compressor", false);
+
+    /**
+    * Disable the compressor.
+    */
+    m_ph.disableCompressor();
+    }
+    /**
+     * Get the state of the solenoid.
+     *
+     * This is just a switch case to better display it on Shuffleboard.
+     */
+    switch (m_doubleSolenoid.get()) {
+      case kOff:
+        SmartDashboard.putString("Get Solenoid", "kOff");
+        break;
+      case kForward:
+        SmartDashboard.putString("Get Solenoid", "kForward");
+        break;
+      case kReverse:
+        SmartDashboard.putString("Get Solenoid", "kReverse");
+        break;
+      default:
+        SmartDashboard.putString("Get Solenoid", "N/A");
+        break;
+    }
+  }
+
+
+//------------------------------------------------------------------------------------------------
+  /** Autonomous Mode */
+//------------------------------------------------------------------------------------------------
+  @Override
+  public void autonomousInit() {
+    m_timer.restart();
+  }
+//------------------------------------------------------------------------------------------------
+  /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
     // Drive for 2 seconds
-    
-  
     if (m_timer.get() < 2.0) {
       // Drive forwards half speed, make sure to turn input squaring off
-      //m_robotDrive.arcadeDrive(0.25, 0.0, false);
-      //m_robotDrive.arcadeDrive(0.25,0.50); 
-      m_lift1.set(0.5);
+      m_robotDrive.arcadeDrive(0.5, 0.0, false);
     } else {
-      m_lift1.stopMotor(); // stop robot
+      m_robotDrive.stopMotor(); // stop robot
     }
-    
-    
   }
-
+//------------------------------------------------------------------------------------------------
   /** This function is called once each time the robot enters teleoperated mode. */
   @Override
   public void teleopInit() {
     SmartDashboard.putString("Teleop", "Initialized!");
-   /*  Compressor phCompressor = new Compressor(1, PneumaticsModuleType.REVPH);
-  phCompressor.enableDigital();
-  phCompressor.disable();
-
-  boolean enabled = phCompressor.enabled();
-  boolean pressureSwitch = phCompressor.getPressureSwitchValue();
-  double current = phCompressor.getCurrent();
-  DoubleSolenoid exampleDoublePH = new DoubleSolenoid(9, PneumaticsModuleType.REVPH, 4, 5);
-
-  exampleDoublePH.set(kOff);
-  exampleDoublePH.set(kForward);
-  exampleDoublePH.set(kReverse);
-  */
   }
-
+//------------------------------------------------------------------------------------------------
   /** This function is called periodically during teleoperated mode. */
   @Override
   public void teleopPeriodic() {
     m_robotDrive.arcadeDrive(-m_controller.getLeftY(), -m_controller.getRightX()); //two stick control
-  
-    //m_lift1.set(m_controller.getLeftTriggerAxis());
-    //m_lift1.set(-m_controller.getRightTriggerAxis());
-
-
     SmartDashboard.putNumber("left trigger access", m_controller.getLeftTriggerAxis());
     SmartDashboard.putNumber("right trigger axis", -m_controller.getRightTriggerAxis());
-    SmartDashboard.putBoolean("sparkmax is alive", m_lift1.isAlive());
-
-    if (m_controller.getLeftTriggerAxis() > 0)
-    {
-      m_lift1.set(0.5);
-    }
-    else 
-    { 
-      m_lift1.stopMotor();
-    }
-
-
-/* 
-    if (m_controller.getLeftBumper()){
-      SmartDashboard.putString("Lift controller", ("left"));
-      //m_lift1.set(0.1);
-      //m_lift2.set(0.1);
-      m_lift1.set(0.1);
-    } else if (m_controller.getRightBumper()){
-      SmartDashboard.putString("Lift controller", ("right"));
-      //m_lift1.set(-0.1);
-      //m_lift2.set(-0.1);
-      m_lift1.set(-0.1);
-    } else {
-      SmartDashboard.putString("Lift controller", ("none"));
-      //m_lift1.set(0);
-      //m_lift2.set(0);
-      m_lift1.set(0);
-    }
-*/
-
-
-    //exampleDouble.set(DoubleSolenoid.Value.kForward);
-    /*
-    if (m_controller.getBButtonPressed()) {
-      exampleDouble.toggle();
-   }
-   
-else if (m_controller.getYButtonPressed()) {
-  exampleDouble.toggle();
-}
-
-
-    exampleDouble.set(kReverse);
-    if (m_controller.getXButtonPressed()) {
-      exampleDouble.toggle();
-   }
-   */
     SmartDashboard.putNumber("Not Right Stick (Left Stick)", (-m_controller.getLeftY()));
-    SmartDashboard.putNumber("Not Left Stick (right stick)", (-m_controller.getRightX()));
-    
-    //SmartDashboard.putNumber("right motor speed", m_rightDrive.get());
-    //SmartDashboard.putNumber("left motor speed", m_leftDrive.get());
-    
-    //m_robotDrive.arcadeDrive(-m_controller.getLeftY(), m_controller.getLeftX(),true); //This code is for a one control stick drive 
-   // m_robotDrive.tankDrive(-m_controller.getLeftY(), -m_controller.getRightY()); // this code is for tank control
-  }
-  private void exampleDoubleset(Value kreverse) {
-  }
+    SmartDashboard.putNumber("Not Left Stick (right stick)", (-m_controller.getRightX())); 
+    // Set Off Button
+    if (SmartDashboard.getBoolean("Set Off", false)) {
+      SmartDashboard.putBoolean("Set Off", false);
 
+      /**
+       * Set the double solenoid to OFF.
+       *
+       * This will set both the forward and reverse solenoid channels to false.
+       */
+      m_doubleSolenoid.set(DoubleSolenoid.Value.kOff);
+    }
+
+    // Set Forward button
+    if (SmartDashboard.getBoolean("Set Forward", false)) {
+      SmartDashboard.putBoolean("Set Forward", false);
+
+      /**
+       * Set the double solenoid direction to FORWARD.
+       *
+       * This will set the forward solenoid channel to true and the reverse
+       * solenoid channel to false.
+       */
+    }
+    
+    if (m_controller.getBButtonPressed()) {
+      m_doubleSolenoid.set(DoubleSolenoid.Value.kForward);
+    } else if (m_controller.getXButtonPressed()) {
+      m_doubleSolenoid.set(DoubleSolenoid.Value.kReverse);
+    } else {
+      m_doubleSolenoid.set(DoubleSolenoid.Value.kOff);
+    }
+  
+
+    // Set Reverse button
+    if (SmartDashboard.getBoolean("Set Reverse", false)) {
+      SmartDashboard.putBoolean("Set Reverse", false); 
+      /**
+       * Set the double solenoid direction to REVERSE.
+       *
+       * This will set the forward solenoid channel to false and the reverse
+       * solenoid channel to true.
+       */
+    }
+  }
+//------------------------------------------------------------------------------------------------
   /** This function is called once each time the robot enters test mode. */
   @Override
   public void testInit() {}
@@ -224,5 +262,3 @@ else if (m_controller.getYButtonPressed()) {
   @Override
   public void testPeriodic() {}
 }
-
-
