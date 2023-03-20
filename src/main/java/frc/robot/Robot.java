@@ -26,6 +26,11 @@ import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
+
+import com.revrobotics.CANSparkMax;
+import com.revrobotics.RelativeEncoder;
+import com.revrobotics.CANSparkMaxLowLevel.MotorType;
+
 import edu.wpi.first.wpilibj.AnalogGyro;
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
@@ -35,8 +40,8 @@ import edu.wpi.first.wpilibj.AnalogGyro;
  */
 public class Robot extends TimedRobot {
   private static final int PH_CAN_ID = 11;
-  private static int forwardChannel = 7;
-  private static int reverseChannel = 6;
+  private static int forwardChannel = 3;
+  private static int reverseChannel = 0;
   PneumaticHub m_ph = new PneumaticHub(PH_CAN_ID);
   DoubleSolenoid m_doubleSolenoid = m_ph.makeDoubleSolenoid(forwardChannel,reverseChannel);
   
@@ -45,11 +50,23 @@ public class Robot extends TimedRobot {
   private final Talon m_leftDrive1 = new Talon(1);
   private final Talon m_rightDrive2 = new Talon(2);
   private final Talon m_rightDrive3 = new Talon(3);
+  //private final PWMSparkMax m_pulley = new PWMSparkMax(4);
+  private final CANSparkMax m_pulley = new CANSparkMax(4,MotorType.kBrushed);
+
+  private final CANSparkMax m_grip = new CANSparkMax(7, MotorType.kBrushless);
+  private final CANSparkMax m_flip = new CANSparkMax(5, MotorType.kBrushless);
+  // private final PWMSparkMax m_grip = new PWMSparkMax(7);
+  // private final PWMSparkMax m_flip = new PWMSparkMax(5);
   private final MotorControllerGroup m_left = new MotorControllerGroup(m_leftDrive0,m_leftDrive1);
   private final MotorControllerGroup m_right = new MotorControllerGroup(m_rightDrive2,m_rightDrive3);
   private final DifferentialDrive m_robotDrive = new DifferentialDrive(m_left, m_right);
   private final Timer m_timer = new Timer();
+  double lastGripIn = 0;
+  double lastGripOut = 0;
+  double lastFlip = 0;
   private final AnalogGyro m_gyro = new AnalogGyro(0);
+
+  private boolean m_gripState = false;
   //--------------------------------------------------------------------------------------------------------
   //Camera Code
   //--------------------------------------------------------------------------------------------------------
@@ -69,6 +86,11 @@ public class Robot extends TimedRobot {
     // Add buttons to set the double
     m_right.setInverted(true);
     m_left.setInverted(false);
+    m_grip.setSmartCurrentLimit(50);
+    m_flip.setSmartCurrentLimit(30);
+    m_pulley.setSmartCurrentLimit(50);
+    // m_pulley.setSafetyEnabled(false);
+    // m_pulley.setInverted(true);
   
     SmartDashboard.setDefaultBoolean("Set Off", false);
     SmartDashboard.setDefaultBoolean("Set Forward", false);
@@ -82,12 +104,12 @@ public class Robot extends TimedRobot {
               // Get the UsbCamera from CameraServer
               UsbCamera camera = CameraServer.startAutomaticCapture();
               // Set the resolution
-              camera.setResolution(480, 640);
+              camera.setResolution(640, 480);
 
               // Get a CvSink. This will capture Mats from the camera
               CvSink cvSink = CameraServer.getVideo();
               // Setup a CvSource. This will send images back to the Dashboard
-              CvSource outputStream = CameraServer.putVideo("Rectangle", 480, 640);
+              CvSource outputStream = CameraServer.putVideo("Rotated", 480, 640);
 
               // Mats are very memory expensive. Lets reuse this Mat.
               Mat mat = new Mat();
@@ -104,11 +126,13 @@ public class Robot extends TimedRobot {
                   // skip the rest of the current iteration
                   continue;
                 }
-                // Put a rectangle on the image
-                Imgproc.rectangle(
-                    mat, new Point(100, 100), new Point(400, 400), new Scalar(255, 255, 255), 5);
-                // Give the output stream a new image to display
-                outputStream.putFrame(mat);
+                double angle = 270;
+                Point center = new Point(mat.width()/2,mat.height()/2);
+                Mat rotationMatrix = Imgproc.getRotationMatrix2D(center, angle, 1);
+                Mat rotatedImage = new Mat();
+                Imgproc.warpAffine(mat, rotatedImage, rotationMatrix, mat.size());
+      
+                outputStream.putFrame(rotatedImage);
               }
             });
     m_visionThread.setDaemon(true);
@@ -131,7 +155,7 @@ public class Robot extends TimedRobot {
 
     // Enable Compressor Digital button
     if (SmartDashboard.getBoolean("Enable Compressor Digital", false)) {
-    SmartDashboard.putBoolean("Enable Compressor Digital", false);
+    //SmartDashboard.putBoolean("Enable Compressor Digital", false);
 
     /**
     * Enable the compressor with digital sensor control.
@@ -146,13 +170,13 @@ public class Robot extends TimedRobot {
 
     // Disable Compressor button
     if (SmartDashboard.getBoolean("Disable Compressor", false)) {
-    SmartDashboard.putBoolean("Disable Compressor", false);
-
+    //SmartDashboard.putBoolean("Disable Compressor", false);
+    m_ph.disableCompressor();
     /**
     * Disable the compressor.
     */
-    m_ph.disableCompressor();
     }
+    
     /**
      * Get the state of the solenoid.
      *
@@ -172,6 +196,7 @@ public class Robot extends TimedRobot {
         SmartDashboard.putString("Get Solenoid", "N/A");
         break;
     }
+
   }
 
 
@@ -186,29 +211,140 @@ public class Robot extends TimedRobot {
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
-    // Drive for 2 seconds
-    if (m_timer.get() < 2.0) {
+    // Drive for half a second
+
+   if (m_timer.get() < 0.3) {
       // Drive forwards half speed, make sure to turn input squaring off
-      m_robotDrive.arcadeDrive(0.5, 0.0, false);
+      m_robotDrive.arcadeDrive(0.8, 0.0, false);
     } else {
       m_robotDrive.stopMotor(); // stop robot
     }
-  }
+   /* m_timer.restart();
+    if (m_timer.get() < 1) {
+      // Drive forwards half speed, make sure to turn input squaring off
+      m_robotDrive.arcadeDrive(-0.3, 0.0, false);
+    } else {
+      m_robotDrive.stopMotor(); // stop robot
+    }
+    m_timer.restart();
+    if (m_timer.get() < 0.3) {
+      // Drive forwards half speed, make sure to turn input squaring off
+      m_robotDrive.arcadeDrive(0.9, 0.0, false);
+    } else {
+      m_robotDrive.stopMotor(); // stop robot
+    } */ 
+    } 
 //------------------------------------------------------------------------------------------------
   /** This function is called once each time the robot enters teleoperated mode. */
   @Override
   public void teleopInit() {
     SmartDashboard.putString("Teleop", "Initialized!");
+    SmartDashboard.putString("Pulley", "Init");
+    SmartDashboard.putString("Set Solenoid", "Init");
   }
+
+  public void doGripIn()
+  {
+        /** This is motor rotation code for the grip */
+    if(m_timer.get() - lastGripIn > 10) {
+    {
+      lastGripIn = m_timer.get();
+    }
+    if (m_timer.get() - lastGripIn < 2) {
+      // Drive forwards half speed, make sure to turn input squaring off
+      m_grip.set(0.1);
+    }
+    else {
+      m_grip.stopMotor(); // stop robot
+    }
+    }
+  }
+  public void doGripOut()
+  {
+        /** This is motor rotation code for the grip */
+    if(m_timer.get() - lastGripOut > 10) {
+    {
+      lastGripOut = m_timer.get();
+    }
+    if (m_timer.get() - lastGripOut < 2) {
+      // Drive forwards half speed, make sure to turn input squaring off
+      m_grip.set(0.1);
+    }
+    else {
+      m_grip.stopMotor(); // stop robot
+    }
+    }
+  }
+
+  public void doFlip()
+  {
+        /** This is motor rotation code for the grip */
+    if(m_timer.get() - lastFlip > 10) {
+    {
+      lastFlip = m_timer.get();
+    }
+    if (m_timer.get() - lastFlip < 2) {
+      // Drive forwards half speed, make sure to turn input squaring off
+      m_flip.set(0.1);
+    }
+    else {
+      m_flip.stopMotor(); // stop robot
+    }
+    }
+  }
+
+
 //------------------------------------------------------------------------------------------------
   /** This function is called periodically during teleoperated mode. */
   @Override
   public void teleopPeriodic() {
     m_robotDrive.arcadeDrive(-m_controller.getLeftY(), -m_controller.getRightX()); //two stick control
+    //m_controller.axisGreaterThan(-m_controller.getRightX(), 0.2, boolean test);
     SmartDashboard.putNumber("left trigger access", m_controller.getLeftTriggerAxis());
     SmartDashboard.putNumber("right trigger axis", -m_controller.getRightTriggerAxis());
     SmartDashboard.putNumber("Not Right Stick (Left Stick)", (-m_controller.getLeftY()));
     SmartDashboard.putNumber("Not Left Stick (right stick)", (-m_controller.getRightX())); 
+
+    if (m_controller.getLeftTriggerAxis()>0.5) {
+      //m_grip.set(0.2);
+      if(m_gripState) 
+      {
+        doGripOut();
+        m_gripState = false;
+      }
+      else 
+      {
+        doGripIn();
+        m_gripState = true;
+      }
+      // doGripIn();
+    }
+    /*else if (m_controller.getRightTriggerAxis()>0.5) { 
+      m_grip.set(-0.2);
+      // doGripOut();
+    }*/
+    /*else
+    {
+      m_grip.set(0);
+    }*/
+
+    if (m_controller.getYButton()) {
+      m_flip.set(-0.2);
+      // doFlip();
+    }
+    else
+    {
+      m_flip.set(0.0);
+    }
+
+
+    if (m_controller.getStartButton()) {
+      m_ph.enableCompressorDigital();
+    }
+
+    if (m_controller.getBackButton()) {
+      m_ph.disableCompressor();
+    }
     // Set Off Button
     if (SmartDashboard.getBoolean("Set Off", false)) {
       SmartDashboard.putBoolean("Set Off", false);
@@ -220,37 +356,29 @@ public class Robot extends TimedRobot {
        */
       m_doubleSolenoid.set(DoubleSolenoid.Value.kOff);
     }
-
-    // Set Forward button
-    if (SmartDashboard.getBoolean("Set Forward", false)) {
-      SmartDashboard.putBoolean("Set Forward", false);
-
-      /**
-       * Set the double solenoid direction to FORWARD.
-       *
-       * This will set the forward solenoid channel to true and the reverse
-       * solenoid channel to false.
-       */
-    }
     
     if (m_controller.getBButtonPressed()) {
+      SmartDashboard.putString("Set Solenoid", "Forward");
       m_doubleSolenoid.set(DoubleSolenoid.Value.kForward);
     } else if (m_controller.getXButtonPressed()) {
+      SmartDashboard.putString("Set Solenoid", "Reverse");
       m_doubleSolenoid.set(DoubleSolenoid.Value.kReverse);
     } else {
+      SmartDashboard.putString("Set Solenoid", "Off");
       m_doubleSolenoid.set(DoubleSolenoid.Value.kOff);
     }
   
-
-    // Set Reverse button
-    if (SmartDashboard.getBoolean("Set Reverse", false)) {
-      SmartDashboard.putBoolean("Set Reverse", false); 
-      /**
-       * Set the double solenoid direction to REVERSE.
-       *
-       * This will set the forward solenoid channel to false and the reverse
-       * solenoid channel to true.
-       */
+    if (m_controller.getRightBumper()) {
+      SmartDashboard.putString("Pulley", "Clockwise");
+      // m_pulley.setInverted(true);
+      m_pulley.set(0.6);
+    } else if (m_controller.getLeftBumper()) {
+      SmartDashboard.putString("Pulley", "Counter-clockwise");
+      //m_pulley.setInverted(true);
+      m_pulley.set(-1);
+    } else {
+      SmartDashboard.putString("Pulley", "Stop");
+      m_pulley.stopMotor();
     }
   }
 //------------------------------------------------------------------------------------------------
